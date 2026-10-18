@@ -3,6 +3,8 @@
 Terminal clock that draws two lines of big block letters, centered on the
 screen, using [blockfont](https://github.com/TheElevatedOne/blockfont.h).
 
+![Static Badge](https://img.shields.io/badge/CLAUDE-VIBECODED?style=for-the-badge&logo=claude&label=VIBECODED&labelColor=%23333333&color=%23de7356)
+
 ## Build & install
 
 Requires `libblockfont` (AUR: `blockfont-git`), or build it in with
