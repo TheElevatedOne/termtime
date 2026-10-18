@@ -1,0 +1,229 @@
+.TH TERMTIME 1 2026-10-18 "termtime 0.1.0" "User Commands"
+.SH NAME
+termtime \- big block-letter clock for the terminal
+.SH SYNOPSIS
+.B termtime
+.RB [ \-c
+.IR file ]
+.RB [ \-1 ]
+.RB [ \-p ]
+.RB [ \-h ]
+.RB [ \-v ]
+.SH DESCRIPTION
+.B termtime
+draws up to two lines of text in large block letters, centered on the
+terminal. Each line has its own format, size and colors. Formats use the
+same conversions as
+.BR date (1),
+so the lines can show the time, the date or any other text.
+.PP
+The screen is redrawn on every tick of the configured interval and
+whenever the terminal is resized.
+.SH OPTIONS
+.TP
+.BR \-c ", " \-\-config " " \fIfile\fR
+Use
+.I file
+instead of searching for a config.
+.TP
+.BR \-1 ", " \-\-once
+Print the lines once to standard output and exit. This is also done
+when standard output is not a terminal.
+.TP
+.BR \-p ", " \-\-path
+Print the path of the config in use and exit.
+.TP
+.BR \-h ", " \-\-help
+Show a short help.
+.TP
+.BR \-v ", " \-\-version
+Show the version.
+.SH KEYS
+.TP
+.BR q ", " Esc
+Quit.
+.TP
+.B r
+Reload the config. A config with errors is ignored and the previous one
+stays in use.
+.SH SIGNALS
+.TP
+.B SIGUSR1
+Reload the config, like
+.BR r .
+.TP
+.BR SIGINT ", " SIGTERM ", " SIGHUP
+Restore the terminal and exit.
+.TP
+.B SIGTSTP
+Restore the terminal and suspend; the clock is drawn again when resumed.
+.SH CONFIGURATION
+The config is a TOML file. The first one found is used:
+.PP
+.RS
+.nf
+\fI$XDG_CONFIG_HOME\fR/termtime/config.toml
+\fI$HOME\fR/.config/termtime/config.toml
+/etc/termtime/config.toml
+.fi
+.RE
+.PP
+Without any of them built-in defaults are used. Unknown options and
+invalid values are reported as errors.
+.SS [general]
+.TP
+.BR interval " (integer, default 1000)"
+Redraw interval in milliseconds, 10 to 3600000. Redraws are aligned to
+the wall clock, so 1000 ticks exactly on each second.
+.TP
+.BR spacing " (integer, default 1)"
+Empty terminal rows between the two lines.
+.TP
+.BR fit " (boolean, default true)"
+Shrink lines that do not fit the terminal, first to its width, then the
+biggest line until both fit its height. Lines never get smaller than
+scale 1.
+.TP
+.BR blocks " (string, default \(dqauto\(dq)"
+How blocks are drawn:
+.B \(dqunicode\(dq
+uses the full block U+2588,
+.B \(dqreverse\(dq
+uses spaces in reverse video, which work with any font and character set,
+and any single ASCII character such as
+.B \(dq#\(dq
+draws with that character.
+.B \(dqauto\(dq
+picks unicode on UTF-8 locales and reverse otherwise.
+.TP
+.BR colors " (\(dqauto\(dq, 256, 16 or 8, default \(dqauto\(dq)"
+Colors the terminal supports. With 16 or 8 colors every configured color
+is mapped to the nearest basic one. Auto detection uses 256 when
+.B COLORTERM
+is set or
+.B TERM
+names a 256 color terminal, 16 on the Linux console (bright colors are
+drawn bold there), 8 for vt100-like or unset
+.BR TERM ,
+and 256 otherwise.
+.TP
+.BR locale " (string, default \(dqC\(dq)"
+Locale for names such as
+.B %A
+and
+.BR %B .
+An empty string uses the locale from the environment. The font only has
+ASCII glyphs, every other character is drawn as one placeholder glyph.
+.SS [line1] and [line2]
+.TP
+.BR enabled " (boolean, default true)"
+Whether the line is shown. With one line disabled the other one is
+centered alone.
+.TP
+.BR format " (string)"
+Text to show, with
+.BR date (1)
+conversions. Defaults are
+.B \(dq%H:%M:%S\(dq
+and
+.BR \(dq%Y\-%m\-%d\(dq .
+.TP
+.BR scale " (integer, 1 to 50)"
+Size of the letters; a glyph is 7\(muscale columns by 5\(muscale rows.
+Defaults are 2 and 1.
+.TP
+.BR color " (integer or string)"
+Default color of the line: an ANSI 256 color number (0\-255) or one of
+.BR black ", " red ", " green ", " yellow ", " blue ", " magenta ", "
+.BR cyan ", " white ", " gray ,
+.BR bright_black ", " bright_red ", " bright_green ", " bright_yellow ,
+.BR bright_blue ", " bright_magenta ", " bright_cyan ", " bright_white .
+.SS [line1.colors] and [line2.colors]
+Colors for parts of the format. Each key is matched literally against
+the format and the longest matching key wins, for example:
+.PP
+.RS
+.nf
+[line1.colors]
+"%H" = "bright_red"    # hours
+":" = 8                # every colon
+"%M:%S" = 10           # minutes, colon and seconds
+.fi
+.RE
+.PP
+A key for a plain conversion such as
+.B \(dq%d\(dq
+also colors its variants with flags or width such as
+.BR %\-d .
+Everything else uses the line's
+.BR color .
+.SH FORMAT
+All conversions of
+.BR strftime (3)
+are supported, including the GNU flags
+.BR \- " (no padding), " _ " (space padding), " 0 ", " ^ " (upper case) and "
+.B #
+and field widths. These
+.BR date (1)
+conversions are supported as well:
+.TP
+.B %N
+Nanoseconds;
+.B %3N
+gives milliseconds,
+.B %6N
+microseconds. Use a shorter
+.B interval
+to see them move.
+.TP
+.B %q
+Quarter of the year (1\-4).
+.TP
+.BR %:z ", " %::z ", " %:::z
+Time zone offset as +hh:mm, +hh:mm:ss, or the shortest of +hh,
++hh:mm and +hh:mm:ss.
+.TP
+.B %%
+A literal %.
+.SH LINUX CONSOLE
+On a virtual console
+.RB ( TERM=linux )
+termtime uses 16 colors and clears the screen on exit, as the console has
+no alternate screen. Without a UTF-8 locale the blocks are drawn in
+reverse video, which needs no special glyphs in the console font.
+.SH ENVIRONMENT
+.TP
+.BR TERM ", " COLORTERM
+Used to detect the colors the terminal supports.
+.TP
+.BR LANG ", " LC_ALL ", " LC_CTYPE
+A UTF-8 character set enables the block glyph.
+.TP
+.BR XDG_CONFIG_HOME ", " HOME
+Used to find the user config.
+.SH FILES
+.TP
+.I /etc/termtime/config.toml
+System wide config, documented with comments.
+.SH EXAMPLES
+A 12 hour clock with colored parts and the weekday below it:
+.PP
+.RS
+.nf
+[line1]
+format = "%I:%M:%S %p"
+scale = 3
+[line1.colors]
+"%I" = "bright_red"
+"%M" = "bright_green"
+"%S" = "bright_blue"
+":" = "gray"
+
+[line2]
+format = "%A"
+color = 244
+.fi
+.RE
+.SH SEE ALSO
+.BR date (1),
+.BR strftime (3)

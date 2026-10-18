@@ -1,0 +1,166 @@
+name: Build
+
+# Builds and tests termtime on every architecture blockfont supports.
+# Pushing a tag (e.g. 0.2.0 or v0.2.0) or running the workflow by hand
+# also publishes the packages and their SHA-256 sums as a release of
+# that tag, or of the latest tag for manual runs.
+
+on:
+  push:
+    branches: [main]
+    tags: ["*"]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Publish the packages to the latest tag's release
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  meta:
+    name: Version
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pick tag and version
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag="$GITHUB_REF_NAME"
+            release=true
+          elif [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "${{ inputs.release }}" = true ]; then
+            tag=$(git tag --sort=-v:refname | head -n 1)
+            if [ -z "$tag" ]; then
+              echo "::error::No tags to release under, push a tag first"
+              exit 1
+            fi
+            release=true
+          else
+            tag=""
+            release=false
+          fi
+
+          if [ -n "$tag" ]; then
+            version="${tag#v}"
+          else
+            version="$(cat VERSION)-$(git rev-parse --short HEAD)"
+          fi
+
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "release=$release"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version $version, tag '${tag}', release $release"
+
+  build:
+    name: ${{ matrix.arch }}
+    needs: meta
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+            cc: gcc
+            packages: ""
+            tests: test
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            cc: gcc
+            packages: ""
+            tests: test
+          - arch: i686
+            runner: ubuntu-24.04
+            cc: gcc -m32
+            packages: gcc-multilib
+            tests: test
+          - arch: armv7
+            runner: ubuntu-24.04
+            cc: arm-linux-gnueabihf-gcc
+            packages: gcc-arm-linux-gnueabihf libc6-dev-armhf-cross qemu-user-binfmt
+            # Interactive tests are timing sensitive, too slow under qemu
+            tests: test-unit test-cli
+            qemu_ld_prefix: /usr/arm-linux-gnueabihf
+
+    env:
+      CC: ${{ matrix.cc }}
+      ARCH: ${{ matrix.arch }}
+      VERSION: ${{ needs.meta.outputs.version }}
+      QEMU_LD_PREFIX: ${{ matrix.qemu_ld_prefix }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install toolchain
+        if: matrix.packages != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ${{ matrix.packages }}
+
+      - name: Build
+        run: make BLOCKFONT=static CFLAGS="-O2 -Wall -Wextra -Werror"
+
+      - name: Test
+        run: make BLOCKFONT=static CFLAGS="-O2 -Wall -Wextra -Werror" ${{ matrix.tests }}
+
+      - name: Package
+        run: make package CFLAGS="-O2 -Wall -Wextra -Werror"
+
+      - name: Check package
+        run: |
+          cd dist
+          sha256sum -c ./*.sha256
+          tar -tzf "termtime-$VERSION-$ARCH.tar.gz"
+          file "../build/static-$ARCH/termtime"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: termtime-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Release
+    needs: [meta, build]
+    if: needs.meta.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.meta.outputs.tag }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum -c ./*.sha256
+          cat ./*.sha256 | sort -k 2 > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "termtime $TAG" --generate-notes --verify-tag
+          fi
+          gh release upload "$TAG" dist/* --clobber

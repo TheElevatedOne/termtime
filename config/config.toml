@@ -1,0 +1,86 @@
+# termtime configuration
+#
+# termtime looks for its config in this order and uses the first one found:
+#   $XDG_CONFIG_HOME/termtime/config.toml
+#   $HOME/.config/termtime/config.toml
+#   /etc/termtime/config.toml
+#
+# Copy this file to ~/.config/termtime/config.toml to customize it.
+# Press 'r' (or send SIGUSR1) to reload the config while termtime is running.
+# Press 'q' or Esc to quit.
+
+[general]
+# Redraw interval in milliseconds. Redraws are aligned to the wall clock,
+# so 1000 ticks exactly on every second.
+interval = 1000
+
+# Empty terminal rows between line 1 and line 2.
+spacing = 2
+
+# Shrink lines that do not fit the terminal (never below scale 1).
+fit = true
+
+# How the blocks are drawn:
+#   "auto"     the block glyph on UTF-8 locales, otherwise "reverse"
+#   "unicode"  the block glyph U+2588
+#   "reverse"  spaces in reverse video, works with any font or charset
+#              (Linux console without UTF-8, serial terminals)
+#   "#"        any single ASCII character
+blocks = "auto"
+
+# Colors the terminal supports: "auto" (from TERM/COLORTERM), 256, 16 or 8.
+# With 16 or 8 the 256 colors below are mapped to the nearest basic one;
+# the Linux console (TERM=linux) uses 16 with bold for the bright colors.
+colors = "auto"
+
+# Locale used for names like %A or %B. The font only has ASCII glyphs,
+# so the default is "C"; "" uses the locale from your environment.
+# locale = ""
+
+# Each line has:
+#   enabled  true / false
+#   format   text with date(1)/strftime(3) conversions, e.g.
+#            %H %I %M %S %p     hours (24h, 12h), minutes, seconds, AM/PM
+#            %Y %y %m %d %e     year, short year, month, day
+#            %a %A %b %B        short/long weekday and month names
+#            %j %U %V %s %Z %z  day of year, week numbers, epoch, timezone
+#            %D %F %T %R        shortcuts for %m/%d/%y %Y-%m-%d %H:%M:%S %H:%M
+#            %N %3N             nanoseconds, milliseconds (lower the interval)
+#            %q %:z %::z        quarter, timezone as +hh:mm, +hh:mm:ss
+#            %%                 a literal %
+#            flags like %-d (no padding) or %_H (space padding) work too
+#            see `man termtime` and `man strftime` for the full list
+#   scale    size of the block letters, 1-50
+#   color    default color: 0-255 (ANSI 256 colors) or a name:
+#            black red green yellow blue magenta cyan white gray
+#            bright_red bright_green bright_yellow bright_blue
+#            bright_magenta bright_cyan bright_white
+#
+# [lineN.colors] overrides the color of parts of the format. Keys are
+# matched literally against the format, the longest match wins:
+#   "%H" = 9       the hours
+#   ":"  = 8       every colon
+#   "%M:%S" = 10   minutes, colon and seconds together
+# A key like "%d" also colors flagged variants like "%-d".
+
+[line1]
+enabled = true
+format = "%H:%M:%S"
+scale = 2
+color = 15
+
+[line1.colors]
+"%H" = "bright_red"
+"%M" = "bright_green"
+"%S" = "bright_blue"
+":" = "gray"
+
+[line2]
+enabled = true
+format = "%a %d.%m.%Y"
+scale = 1
+color = 7
+
+[line2.colors]
+"%a" = "bright_yellow"
+"." = "gray"
